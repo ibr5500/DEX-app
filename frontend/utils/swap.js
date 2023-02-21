@@ -6,7 +6,7 @@ import {
   CRYPTO_DEV_TOKEN_CONTRACT_ADDRESS,
 } from "../constants";
 
-const getAmountOfTokensReceivedFromSwap = async (
+export const getAmountOfTokensReceivedFromSwap = async (
   _swapAmountWei,
   provider,
   ethSelected,
@@ -14,7 +14,6 @@ const getAmountOfTokensReceivedFromSwap = async (
   reservedCD,
 ) => {
   const exchangeContract = new Contract(EXCHANGE_CONTRACT_ADDRESS, EXCHANGE_CONTRACT_ABI, provider);
-
   let amountOfTokens;
 
   if (ethSelected) {
@@ -34,13 +33,18 @@ const getAmountOfTokensReceivedFromSwap = async (
   return amountOfTokens;
 };
 
-const swapTokens = async (signer, swapAmountWei, tokenToBeReceivedAfterSwap, ethSelected) => {
+export const swapTokens = async (
+  signer,
+  swapAmountWei,
+  tokenToBeReceivedAfterSwap,
+  ethSelected,
+) => {
+  const exchangeContract = new Contract(EXCHANGE_CONTRACT_ADDRESS, EXCHANGE_CONTRACT_ABI, signer);
   const tokenContract = new Contract(
     CRYPTO_DEV_TOKEN_CONTRACT_ADDRESS,
     CRYPTO_DEV_TOKEN_CONTRACT_ABI,
     signer,
   );
-
   let tx;
 
   if (ethSelected) {
@@ -50,10 +54,7 @@ const swapTokens = async (signer, swapAmountWei, tokenToBeReceivedAfterSwap, eth
   } else {
     tx = await tokenContract.approve(EXCHANGE_CONTRACT_ADDRESS, swapAmountWei.toString());
     await tx.wait();
-
     tx = await exchangeContract.cryptoDevTokenToEth(swapAmountWei, tokenToBeReceivedAfterSwap);
   }
   await tx.wait();
 };
-
-export { getAmountOfTokensReceivedFromSwap, swapTokens };

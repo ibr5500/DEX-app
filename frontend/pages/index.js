@@ -1,123 +1,412 @@
-import Head from 'next/head'
-import Image from 'next/image'
-import { Inter } from '@next/font/google'
-import styles from '@/styles/Home.module.css'
-
-const inter = Inter({ subsets: ['latin'] })
+import { BigNumber, providers, utils } from "ethers";
+import Head from "next/head";
+import React, { useEffect, useRef, useState } from "react";
+import Web3Modal from "web3modal";
+import { addLiquidity, calculateCD } from "../utils/addLiquidity";
+import {
+  getCDTokensBalance,
+  getEtherBalance,
+  getLPTokensBalance,
+  getReserveOfCDTokens,
+} from "../utils/getAmounts";
+import { getTokensAfterRemove, removeLiquidity } from "../utils/removeLiquidity";
+import { swapTokens, getAmountOfTokensReceivedFromSwap } from "../utils/swap";
+import styles from "@/styles/Home.module.css";
 
 export default function Home() {
+  const [loading, setLoading] = useState(false);
+  const [liquidityTab, setLiquidityTab] = useState(true);
+
+  const zero = BigNumber.from(0);
+
+  const [ethBalance, setEthBalance] = useState(zero);
+  const [reservedCD, setReservedCD] = useState(zero);
+
+  const [etherBalanceContract, setEtherBalanceContract] = useState(zero);
+  const [cdBalance, setCDBalance] = useState(zero);
+  const [lpBalance, setLPBalance] = useState(zero);
+  const [addEther, setAddEther] = useState(zero);
+
+  const [addCDTokens, setAddCDTokens] = useState(zero);
+  const [removeEther, setRemoveEther] = useState(zero);
+  const [removeCD, setRemoveCD] = useState(zero);
+
+  const [removeLPTokens, setRemoveLPTokens] = useState("0");
+
+  const [swapAmount, setSwapAmount] = useState("");
+  const [tokenToBeReceivedAfterSwap, setTokenToBeReceivedAfterSwap] = useState(zero);
+
+  const [ethSelected, setEthSelected] = useState(true);
+
+  const web3ModalRef = useRef();
+
+  const [walletConnected, setWalletConnected] = useState(false);
+
+  const getAmounts = async () => {
+    try {
+      const provider = await getProviderOrSigner();
+      const signer = await getProviderOrSigner(true);
+      const address = await signer.getAddress();
+
+      const _ethBalance = await getEtherBalance(provider, address);
+      const _cdBalance = await getCDTokensBalance(provider, address);
+      const _lpBalance = await getLPTokensBalance(provider, address);
+
+      const _reservedCD = await getReserveOfCDTokens(provider);
+
+      const _ethBalanceContract = await getEtherBalance(provider, null, true);
+      setEthBalance(_ethBalance);
+      setCDBalance(_cdBalance);
+      setLPBalance(_lpBalance);
+      setReservedCD(_reservedCD);
+      setEtherBalanceContract(_ethBalanceContract);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const _swapTokens = async () => {
+    try {
+      const swapAmountWei = utils.parseEther(swapAmount);
+
+      if (!swapAmountWei.eq(zero)) {
+        const signer = await getProviderOrSigner(true);
+        setLoading(true);
+
+        await swapTokens(signer, swapAmountWei, tokenToBeReceivedAfterSwap, ethSelected);
+        setLoading(false);
+
+        await getAmounts();
+        setSwapAmount("");
+      }
+    } catch (error) {
+      console.error(error);
+      setLoading(false);
+      setSwapAmount("");
+    }
+  };
+
+  const _getAmountOfTokensReceivedFromSwap = async (_swapAmount) => {
+    try {
+      const _swapAmountWEI = utils.parseEther(_swapAmount.toString());
+
+      if (!_swapAmountWEI.eq(zero)) {
+        const provider = await getProviderOrSigner();
+
+        const _ethBalance = await getEtherBalance(provider, null, true);
+        const amountOfTokens = await getAmountOfTokensReceivedFromSwap(
+          _swapAmountWEI,
+          ethSelected,
+          _ethBalance,
+          reservedCD,
+        );
+
+        setTokenToBeReceivedAfterSwap(amountOfTokens);
+      } else {
+        setTokenToBeReceivedAfterSwap(zero);
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const _addLiquidity = async () => {
+    try {
+      const addEtherWEI = utils.parseEther(addEther.toString());
+
+      if (!addCDTokens.eq(zero) && !addEtherWEI.eq(zero)) {
+        const signer = await getProviderOrSigner(true);
+        setLoading(true);
+
+        await addLiquidity(signer, addCDTokens, addEtherWEI);
+        setLoading(false);
+
+        setAddCDTokens(zero);
+        await getAmounts();
+      } else {
+      }
+    } catch (error) {
+      console.error(error);
+      setAddCDTokens(zero);
+    }
+  };
+
+  const _removeLiquidity = async () => {
+    try {
+      const signer = await getProviderOrSigner(true);
+
+      const removeLPTokensWEI = utils.parseEther(removeLPTokens);
+      setLoading(true);
+
+      await removeLiquidity(signer, removeLPTokensWEI);
+      setLoading(false);
+
+      await getAmounts();
+      setRemoveCD(zero);
+      setRemoveEther(zero);
+    } catch (error) {
+      console.error(error);
+      setRemoveCD(zero);
+      setRemoveEther(zero);
+    }
+  };
+
+  const _getTokensAfterRemove = async (_removeLPTokens) => {
+    try {
+      const provider = getProviderOrSigner();
+
+      const removeLPTokensWEI = utils.parseEther(_removeLPTokens);
+
+      const _ethBalance = await getEtherBalance(provider, null, true);
+
+      const cryptoDevTokenReserve = await getReserveOfCDTokens(provider);
+
+      const { _removeEther, _reomveCD } = await getTokensAfterRemove(
+        provider,
+        removeLPTokensWEI,
+        _ethBalance,
+        cryptoDevTokenReserve,
+      );
+
+      setRemoveEther(_removeEther);
+      setRemoveCD(_reomveCD);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const connectWallet = async () => {
+    try {
+      await getProviderOrSigner();
+      setWalletConnected(true);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const getProviderOrSigner = async (needSigner = false) => {
+    const provider = await web3ModalRef.current.connect();
+    const web3Provider = new providers.Web3Provider(provider);
+
+    const { chainId } = await web3Provider.getNetwork();
+    if (chainId !== 5) {
+      window.alert("Change the network to Goerli.");
+      throw new Error("Change network to Goerli.");
+    }
+
+    if (needSigner) {
+      const signer = web3Provider.getSigner();
+      return signer;
+    }
+
+    return web3Provider;
+  };
+
+  useEffect(() => {
+    if (!walletConnected) {
+      web3ModalRef.current = new Web3Modal({
+        network: "goerli",
+        providerOptions: {},
+        disableInjectedProvider: false,
+      });
+      connectWallet();
+      getAmounts();
+    }
+  }, [walletConnected]);
+
+  const renderButton = () => {
+    if (!walletConnected) {
+      return (
+        <button
+          className={styles.button}
+          onClick={() => connectWallet()}
+        >
+          Connect your wallet
+        </button>
+      );
+    }
+
+    if (loading) {
+      return <button className={styles.button}>Loading ..!!</button>;
+    }
+
+    if (liquidityTab) {
+      return (
+        <>
+          <div className={styles.description}>
+            You have: <br />
+            {utils.formatEther(cdBalance)} Crypto Dev Tokens.
+            <br />
+            {utils.formatEther(ethBalance)} Ether.
+            <br />
+            {utils.formatEther(lpBalance)} Crypto Dev LP Tokens.
+          </div>
+          <div>
+            {utils.parseEther(reservedCD.toString()).eq(zero) ? (
+              <div>
+                <input
+                  type="number"
+                  placeholder="Amount of Ether"
+                  onChange={(e) => setAddEther(e.target.value || "0")}
+                  className={styles.input}
+                />
+                <input
+                  type="number"
+                  placeholder="Amount of CryptoDev Tokens"
+                  onChange={(e) =>
+                    setAddCDTokens(BigNumber.from(utils.parseEther(e.target.value || "0")))
+                  }
+                  className={styles.input}
+                />
+                <button
+                  className={styles.button}
+                  onClick={() => _addLiquidity()}
+                >
+                  Add
+                </button>
+              </div>
+            ) : (
+              <div>
+                <input
+                  type="number"
+                  placeholder="Amount of Ether"
+                  onChange={async (e) => {
+                    setAddEther(e.target.value || "0");
+
+                    const _addCDTokens = await calculateCD(
+                      e.target.value || "0",
+                      etherBalanceContract,
+                      reservedCD,
+                    );
+
+                    setAddCDTokens(_addCDTokens);
+                  }}
+                  className={styles.input}
+                />
+                <div className={styles.inputDiv}>
+                  {`You will need ${utils.formatEther(addCDTokens)} Crypto Dev Tokens`}
+                </div>
+                <button
+                  className={styles.button1}
+                  onClick={() => _addLiquidity()}
+                >
+                  Add
+                </button>
+              </div>
+            )}
+            <div>
+              <input
+                type="number"
+                placeholder="Amount of LP Tokens"
+                onChange={async (e) => {
+                  setRemoveLPTokens(e.target.value || "0");
+
+                  await _getTokensAfterRemove(e.target.value || "0");
+                }}
+                className={styles.input}
+              />
+              <div className={styles.inputDiv}>
+                {`You will get ${utils.formatEther(
+                  removeCD,
+                )} Crypto Dev Tokens and ${utils.formatEther(removeEther)} ETH`}
+              </div>
+              <button
+                className={styles.button}
+                onClick={() => _removeLiquidity()}
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        </>
+      );
+    } else {
+      return (
+        <>
+          <input
+            type="number"
+            placeholder="Amount"
+            onChange={async (e) => {
+              setSwapAmount(e.target.value || "");
+              await _getAmountOfTokensReceivedFromSwap(e.target.value || "0");
+            }}
+            className={styles.input}
+            value={swapAmount}
+          />
+          <select
+            className={styles.select}
+            name="dropdown"
+            onChange={async () => {
+              setEthSelected(!ethSelected);
+              await _getAmountOfTokensReceivedFromSwap(0);
+              setSwapAmount("");
+            }}
+          >
+            <option value="eth">Ethereum</option>
+            <option value="cryptoDevToken">Crypto Dev Token</option>
+          </select>
+          <br />
+          <div className={styles.inputDiv}>
+            {ethSelected
+              ? `You will get ${utils.formatEther(tokenToBeReceivedAfterSwap)} Crypto Dev Tokens`
+              : `You will get ${utils.formatEther(tokenToBeReceivedAfterSwap)} Eth`}
+          </div>
+          <button
+            className={styles.button1}
+            onClick={_swapTokens}
+          >
+            Swap
+          </button>
+        </>
+      );
+    }
+  };
+
   return (
     <>
       <Head>
-        <title>Create Next App</title>
-        <meta name="description" content="Generated by create next app" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link rel="icon" href="/favicon.ico" />
+        <title>Crypto Devs</title>
+        <meta
+          name="description"
+          content="Whitelist-Dapp"
+        />
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1"
+        />
+        <link
+          rel="icon"
+          href="/favicon.ico"
+        />
       </Head>
       <main className={styles.main}>
-        <div className={styles.description}>
-          <p>
-            Get started by editing&nbsp;
-            <code className={styles.code}>pages/index.js</code>
-          </p>
+        <div>
+          <h1 className={styles.title}>Welcome to Crypto Devs Exchange!!</h1>
+          <div className={styles.description}>Exchange Ethereum &#60;&#62; Crypto Dev Tokens</div>
           <div>
-            <a
-              href="https://vercel.com?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
+            <button
+              className={styles.button}
+              onClick={() => setLiquidityTab(true)}
             >
-              By{' '}
-              <Image
-                src="/vercel.svg"
-                alt="Vercel Logo"
-                className={styles.vercelLogo}
-                width={100}
-                height={24}
-                priority
-              />
-            </a>
+              Liquidity
+            </button>
+            <button
+              className={styles.button}
+              onClick={() => setLiquidityTab(false)}
+            >
+              Swap
+            </button>
           </div>
+          {renderButton()}
         </div>
-
-        <div className={styles.center}>
-          <Image
-            className={styles.logo}
-            src="/next.svg"
-            alt="Next.js Logo"
-            width={180}
-            height={37}
-            priority
+        <div>
+          <img
+            className={styles.image}
+            src="./cryptodev.svg"
           />
-          <div className={styles.thirteen}>
-            <Image
-              src="/thirteen.svg"
-              alt="13"
-              width={40}
-              height={31}
-              priority
-            />
-          </div>
-        </div>
-
-        <div className={styles.grid}>
-          <a
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-            className={styles.card}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <h2 className={inter.className}>
-              Docs <span>-&gt;</span>
-            </h2>
-            <p className={inter.className}>
-              Find in-depth information about Next.js features and&nbsp;API.
-            </p>
-          </a>
-
-          <a
-            href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-            className={styles.card}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <h2 className={inter.className}>
-              Learn <span>-&gt;</span>
-            </h2>
-            <p className={inter.className}>
-              Learn about Next.js in an interactive course with&nbsp;quizzes!
-            </p>
-          </a>
-
-          <a
-            href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-            className={styles.card}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <h2 className={inter.className}>
-              Templates <span>-&gt;</span>
-            </h2>
-            <p className={inter.className}>
-              Discover and deploy boilerplate example Next.js&nbsp;projects.
-            </p>
-          </a>
-
-          <a
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-            className={styles.card}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <h2 className={inter.className}>
-              Deploy <span>-&gt;</span>
-            </h2>
-            <p className={inter.className}>
-              Instantly deploy your Next.js site to a shareable URL
-              with&nbsp;Vercel.
-            </p>
-          </a>
         </div>
       </main>
+      <footer className={styles.footer}>Made using NextJs & Solidity</footer>
     </>
-  )
+  );
 }
