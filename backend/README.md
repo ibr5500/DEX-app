@@ -1,5 +1,5 @@
 # Decentralized Exchange (backend)
 
 ```
-Exchange Contract Address:  0xcF16Fff5187ff7E0bA75C19aaA1fB61110f49520
+Exchange Contract Address: 0xdDBb317b704C1Ec58BCa0b9882611aef07Cb3a7e
 ```

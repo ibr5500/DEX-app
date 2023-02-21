@@ -45,7 +45,7 @@ export const CRYPTO_DEV_TOKEN_CONTRACT_ABI = [
   },
 ];
 
-export const EXCHANGE_CONTRACT_ADDRESS = "0xcF16Fff5187ff7E0bA75C19aaA1fB61110f49520";
+export const EXCHANGE_CONTRACT_ADDRESS = "0xdDBb317b704C1Ec58BCa0b9882611aef07Cb3a7e";
 export const EXCHANGE_CONTRACT_ABI = [
   {
     inputs: [
