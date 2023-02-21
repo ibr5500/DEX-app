@@ -179,7 +179,7 @@ contract Exchange is ERC20 {
             address(this),
             _tokensSold
         );
-        // send the `ethBought` to the user from the contract
+        // send the  `ethBought` to the user from the contract
         payable(msg.sender).transfer(ethBought);
     }
 }
